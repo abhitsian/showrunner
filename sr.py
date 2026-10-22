@@ -17,7 +17,8 @@ import sys
 import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-APP = os.path.expanduser("~/Applications/Showrunner.app")
+# run from the repo, or from inside the app bundle (Showrunner.app/Contents/Resources/sr.py)
+APP = os.path.dirname(os.path.dirname(HERE)) if HERE.endswith("Contents/Resources") else os.path.expanduser("~/Applications/Showrunner.app")
 SHOWS = os.path.expanduser("~/Showrunner")
 REMOTE = "http://127.0.0.1:4977/"
 

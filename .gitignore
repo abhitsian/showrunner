@@ -1,2 +1,3 @@
 *.rehearsals.json
 .DS_Store
+dist/

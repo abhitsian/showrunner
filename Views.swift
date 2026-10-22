@@ -65,9 +65,7 @@ struct Presenter: View {
                     TalkView(m: m, item: c.item)
                 }
             } else {
-                Text("No show open").font(.system(size: 18, weight: .bold))
-                Text("Open a .show.json or .show.md from the SR menu, or drop one on the app.").foregroundColor(.secondary)
-                Spacer()
+                Welcome()
             }
             BigButtons(m: m)
         }
@@ -486,6 +484,37 @@ struct LogView: View {
                 }
                 if m.log.isEmpty { Text("What the show did shows up here.").font(.system(size: 11)).foregroundColor(.secondary) }
             }
+        }
+    }
+}
+
+// shown when no show is open: start one, open one, or pick a recent one
+struct Welcome: View {
+    var app: AppDelegate? { NSApp.delegate as? AppDelegate }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Showrunner").font(.system(size: 26, weight: .bold))
+            Text("A run of show for talks that mix slides, live demos and a talk track. Write it in Markdown, then step through it here while each item brings its window forward.")
+                .foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("New Show from Template") { app?.newShow() }.keyboardShortcut("n")
+                Button("Open Show…") { app?.openShow() }.keyboardShortcut("o")
+                Button("Example Shows") { app?.openExamples() }
+            }
+            let recent = UserDefaults.standard.stringArray(forKey: "recent") ?? []
+            if !recent.isEmpty {
+                Text("RECENT").font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary).padding(.top, 8)
+                ForEach(recent.prefix(8), id: \.self) { p in
+                    Button { app?.open(p) } label: {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text((p as NSString).lastPathComponent).font(.system(size: 13, weight: .medium))
+                            Text((p as NSString).deletingLastPathComponent).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
+                    }.buttonStyle(.plain)
+                }
+            }
+            Text("From Terminal: sr import deck.pptx --pdf deck.pdf turns a deck into a show.").font(.system(size: 11)).foregroundColor(.secondary).padding(.top, 8)
+            Spacer()
         }
     }
 }

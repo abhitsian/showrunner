@@ -8,9 +8,21 @@ It grew out of Handle's Autopilot, which was built for one customer demo. Showru
 
 ```
 ./build.sh                      # builds ~/Applications/Showrunner.app and links `sr` into ~/.local/bin
+./build.sh --dist               # also writes dist/Showrunner.zip to give to someone else
 sr new my-demo --from demo      # a show in ~/Showrunner, from an example
 sr open ~/Showrunner/my-demo.show.md
 ```
+
+Showrunner is a regular Mac app. It has a Dock icon, appears in ⌘-Tab and Spotlight, and has its own menu bar: File (New, Open, Open Recent, Edit Show File, Reveal in Finder, Reload), Show (Start / Next ⌘↩, items ⌘↓ ⌘↑, beats ⌘→ ⌘←, Pause ⌘P, Save Run ⌘S, Run Checks ⌘K), View and Help. You can also drop a show file on the Dock icon. With no show open, the window offers New, Open, the examples and your recent shows.
+
+The View menu sets how the window behaves. Each setting is on by default and kept across launches:
+
+- **Float on Top:** keeps the window above other apps.
+- **Hide from Screen Sharing:** leaves the window out of screenshots and shares that honour it.
+- **Don't Take Focus When Clicked:** clicking a button leaves Chrome or Keynote in front, so keyboard input still goes to the demo. Turn it off to use the menu shortcuts after clicking the window.
+- **Menu Bar Icon:** the SR item in the menu bar, for opening shows while another app is in front.
+
+The app bundle carries this guide (Help > Showrunner Guide), the examples (Help > Example Shows) and `sr.py`. Someone without the repo can run `Showrunner.app/Contents/Resources/sr.py`. The zip is unsigned, so on another Mac the first launch needs right-click > Open.
 
 The window has two panes:
 
