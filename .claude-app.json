@@ -1,0 +1,8 @@
+{
+  "name": "Showrunner",
+  "type": "native",
+  "entry": "build.sh",
+  "open": "~/Applications/Showrunner.app",
+  "install": "./build.sh",
+  "description": "Presenter console for talks that mix slides, live demos and a talk track; hidden from screen sharing"
+}
