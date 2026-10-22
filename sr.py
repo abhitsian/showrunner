@@ -6,7 +6,7 @@
   sr from-autopilot <run.json> [-o out.show.json]                   convert a Handle Autopilot run of show
   sr check <show>                                                   parse it, list the items, run the preflight checks
   sr open <show>                                                    open it in Showrunner
-  sr state | next | prev | go N | primary | toggle | beat | start | pause | reload    drive the open show
+  sr state | next | prev | go N | primary | toggle | beat | start | pause | reload | save    drive the open show
 """
 import json
 import os
@@ -98,9 +98,15 @@ def cmd_import(deck):
         lines.append(f"## [slide {s['n']}] {s['title']}")
         if s["n"] in images:
             lines.append(f"@image {images[s['n']]}")
+        notes = s["notes"]
+        m = re.match(r"\[(\d+(?:\.\d+)?)\s*(min|mins|minutes|sec|secs|seconds)\]\s*", notes)
+        if m:
+            mins = float(m.group(1)) / (60 if m.group(2).startswith("sec") else 1)
+            lines.append(f"@min {mins:g}")
+            notes = notes[m.end():]
         lines.append(f"> Slide {s['n']}.")
         lines.append("")
-        lines.append(s["notes"] or "(no speaker notes)")
+        lines.append(notes or "(no speaker notes)")
         lines.append("")
     with open(out, "w") as f:
         f.write("\n".join(lines))
@@ -157,7 +163,7 @@ def main():
         subprocess.run(["open", "-a", APP, os.path.abspath(os.path.expanduser(a[1]))])
     elif c == "go" and len(a) > 1:
         remote(f"go/{a[1]}")
-    elif c in ("state", "next", "prev", "back", "primary", "toggle", "start", "pause", "reload"):
+    elif c in ("state", "next", "prev", "back", "primary", "toggle", "start", "pause", "reload", "save"):
         remote(c)
     elif c == "beat":
         remote("beat/prev" if len(a) > 1 and a[1] == "prev" else "beat")

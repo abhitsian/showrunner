@@ -94,7 +94,7 @@ Press **Start the show**, run through it and press **Save run**. Each run is app
 Showrunner answers on `127.0.0.1:4977`. Use it from a clicker app, a Stream Deck, a phone shortcut over your own network relay, or Claude:
 
 ```
-sr state | sr next | sr prev | sr go 5 | sr primary | sr toggle | sr beat | sr start | sr pause | sr reload
+sr state | sr next | sr prev | sr go 5 | sr primary | sr toggle | sr beat | sr start | sr pause | sr reload | sr save
 curl 127.0.0.1:4977/next
 ```
 

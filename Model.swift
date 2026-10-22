@@ -274,11 +274,12 @@ final class Model: ObservableObject {
         case "start": startClock()
         case "pause": pauseClock()
         case "reload": reload()
+        case "save": saveRun()
         case "open": if parts.count > 1 { open(parts.dropFirst().joined(separator: "/").removingPercentEncoding ?? "") }
         default: break
         }
         var j: J = ["show": show.title, "pos": pos + 1, "count": entries.count, "running": running,
-                    "elapsed": Int(elapsed), "planned": Int(plannedTotal)]
+                    "elapsed": Int(elapsed), "planned": Int(plannedTotal), "log": Array(log.prefix(3))]
         if let c = current {
             j["item"] = ["section": c.sectionTitle, "title": c.item.title, "kind": c.item.kind, "cue": c.item.cue, "say": c.item.say]
         }
