@@ -85,6 +85,35 @@ Actions run when you arrive on an item, in the order listed:
 
 JSON uses the same model: `{title, preflight:[...], qa:[{q,a}], sections:[{title, minutes, owner, items:[{kind, title, cue, say, note, lines:[{say,note}], image, slide, minutes, owner, go:[actions], fallback:[actions]}]}]}`, where an action is an object such as `{"chrome": "admin", "open": "https://..."}`.
 
+## Your shows and past runs
+
+The **Shows** tab lists every show in `~/Showrunner` (any folder inside it) and every show you opened recently. Each row shows the item count, planned time and saved runs, with Open and Share… buttons. The open show also lists its last ten runs: press **Compare** on one and the outline shows that run's section times beside each budget. With no show open, the window lists the same shows.
+
+## Share a show so someone else can run it
+
+**Share…** (File > Share Show…, ⌘⇧S, or the button in the Shows tab) packs the show into one `.showrunner` file in `~/Showrunner/Shared/`. The file holds:
+
+- the show file, with its paths rewritten to point inside the pack
+- every local file the show refers to: slide images, videos, fallback recordings, files for `@open` and `@app`, and anything listed under `attach:`
+- the show's saved runs
+
+Then it offers AirDrop, Mail, Messages and the other share options. The recipient needs Showrunner installed (the zip from the Releases page; right-click > Open the first time). They double-click the file, and Showrunner unpacks it into `~/Showrunner/<name>/` and opens it.
+
+On their Mac:
+
+- `@chrome` items find the tab by address, or open the URL. They need their own access to whatever the URL points at.
+- Items that use Handle's autoplay show the talk track as beats instead, because Handle isn't there. The cue may still say to press Play; follow the beats.
+- `@shell` and `@app` items depend on the same app or folder existing on their side.
+
+`attach:` (Markdown front matter, repeatable) or `"attach": [...]` (JSON) keeps files with the show, such as the deck. The 📎 menu in the window opens them.
+
+```
+sr pack show.show.md            # writes ~/Showrunner/Shared/<title>.showrunner
+sr unpack file.showrunner       # unpacks into ~/Showrunner and prints the show path
+sr from-autopilot run.json --flows flows.json --fallback recordings/ --attach deck.pptx
+                                # an Autopilot run of show that works without Handle: URLs, beats, recordings
+```
+
 ## Preflight
 
 `preflight` in a JSON show lists what must be ready. Checks run from the Checks tab, or with `sr check`.

@@ -48,6 +48,7 @@ struct Show {
     var qa: [QA] = []
     var preflight: [J] = []
     var autoGo = true
+    var attach: [String] = []  // files to keep with the show (a deck, a handout); packed with it and listed in the window
     var usesHandle: Bool { sections.contains { $0.items.contains { $0.handle } } }
 }
 
@@ -83,6 +84,7 @@ enum Loader {
         s.title = d.str("title") ?? ""
         s.autoGo = d.bool("autoGo") ?? true
         s.preflight = d.list("preflight")
+        s.attach = ((d["attach"] as? [String]) ?? (d["attach"] as? String).map { [$0] } ?? []).map { resolvePath($0, base) }
         s.qa = d.list("qa").map { QA(q: $0.str("q") ?? "", a: $0.str("a") ?? "") }
         s.sections = d.list("sections").map { sd in
             Section(title: sd.str("title") ?? "", minutes: sd.num("minutes"), owner: sd.str("owner"),
@@ -128,6 +130,7 @@ enum Loader {
 
 // Markdown shows, for writing a run of show by hand:
 //   title: Quarterly review          front matter, before the first heading
+//   attach: deck.pptx                a file to keep with the show (repeatable); packed when you share it
 //   # Branding (4m)                  a section, with an optional time budget
 //   ## [slide 2] Home page (1m)      an item: [slide N], [demo], [talk], [app], [video], [break]
 //   > Switch to the Admin Console    what to do (cue)
@@ -181,6 +184,9 @@ enum Markdown {
             if line.isEmpty { flushPara(); continue }
             if sec == nil, it == nil, !inQA, line.lowercased().hasPrefix("title:") {
                 s.title = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces); continue
+            }
+            if sec == nil, it == nil, !inQA, line.lowercased().hasPrefix("attach:") {
+                s.attach.append(resolvePath(String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces), base)); continue
             }
             if line == "---" { continue }
             if line.hasPrefix("# ") {

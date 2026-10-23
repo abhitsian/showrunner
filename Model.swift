@@ -28,7 +28,10 @@ final class Model: ObservableObject {
         didSet { UserDefaults.standard.set(fontSize, forKey: "fontSize") }
     }
     @Published var notice: String?
-    @Published var lastRun: [String: Double] = [:]   // section title → seconds, from the last saved rehearsal
+    @Published var lastRun: [String: Double] = [:]   // section title → seconds, from the run you compare against
+    @Published var runs: [RunInfo] = []               // this show's saved rehearsals
+    @Published var compareRun: Int?                   // which run the outline compares against; nil = the latest
+    @Published var library: [ShowInfo] = []           // every show in ~/Showrunner and the recent list
 
     var path: String? { didSet { UserDefaults.standard.set(path, forKey: "showPath") } }
     private var stamp: Date?
@@ -40,7 +43,7 @@ final class Model: ObservableObject {
     private var timer: Timer?
 
     init() {
-        if let p = UserDefaults.standard.string(forKey: "showPath") { open(p, keepPosition: true) }
+        if let p = UserDefaults.standard.string(forKey: "showPath") { open(p, keepPosition: true) } else { scanLibrary() }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
     }
 
@@ -58,8 +61,21 @@ final class Model: ObservableObject {
         recent.insert(p, at: 0)
         UserDefaults.standard.set(Array(recent.prefix(10)), forKey: "recent")
         if !keepPosition { resetClock(); go(0, act: false) }
+        compareRun = nil
         loadLastRun()
+        scanLibrary()
     }
+
+    func scanLibrary() {
+        let recent = UserDefaults.standard.stringArray(forKey: "recent") ?? []
+        DispatchQueue.global().async {
+            let l = Library.scan(recent: recent)
+            DispatchQueue.main.async { self.library = l }
+        }
+    }
+
+    // compare the outline against an earlier rehearsal
+    func compare(_ run: Int?) { compareRun = run; loadLastRun() }
 
     func reload(keepPosition: Bool = true) {
         guard let path else { return }
@@ -117,7 +133,7 @@ final class Model: ObservableObject {
 
     static let clock: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f }()
 
-    var isDemo: Bool { current?.item.handle == true }
+    var isDemo: Bool { current?.item.handle == true && handleUp }
     var demoLive: Bool {
         guard isDemo, let st = handle?.status else { return false }
         return ["playing", "ready", "paused"].contains(st) && onItemTab
@@ -144,7 +160,7 @@ final class Model: ObservableObject {
 
     // ⌃⌥→ / ⌃⌥←: a demo step on a Handle tab, else the next beat
     func step(_ d: Int) {
-        if isDemo { Handle.send(d > 0 ? "next" : "prev"); return }
+        if isDemo && onItemTab { Handle.send(d > 0 ? "next" : "prev"); return }
         let n = current?.item.lines.count ?? 0
         if n > 0 { beat = max(0, min(n - 1, beat + d)) }
     }
@@ -187,12 +203,7 @@ final class Model: ObservableObject {
         itemStart = Date()
     }
 
-    private var rehearsalPath: String? {
-        guard let path else { return nil }
-        let real = (path as NSString).resolvingSymlinksInPath
-        let name = ((real as NSString).lastPathComponent as NSString).deletingPathExtension
-        return ((real as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name + ".rehearsals.json")
-    }
+    private var rehearsalPath: String? { path.map(Library.rehearsalPath) }
 
     // append this run to <show>.rehearsals.json: total, and planned vs actual per item
     func saveRun() {
@@ -207,15 +218,16 @@ final class Model: ObservableObject {
         if let d = try? JSONSerialization.data(withJSONObject: runs, options: [.prettyPrinted]) {
             do { try d.write(to: URL(fileURLWithPath: rp)); say("Saved rehearsal: \(fmt(elapsed)) of \(fmt(plannedTotal)) planned") } catch { say("Couldn't save timings: \(error.localizedDescription)") }
         }
+        compareRun = nil
         loadLastRun()
+        scanLibrary()
         if wasRunning { startClock() }
     }
 
     func loadLastRun() {
-        lastRun = [:]
-        guard let rp = rehearsalPath, let d = try? Data(contentsOf: URL(fileURLWithPath: rp)),
-              let runs = try? JSONSerialization.jsonObject(with: d) as? [J], let last = runs.last else { return }
-        for i in last.list("items") { lastRun[i.str("section") ?? "", default: 0] += i.num("actual") ?? 0 }
+        runs = path.map(Library.runs) ?? []
+        let pick = compareRun.flatMap { k in runs.first { $0.id == k } } ?? runs.last
+        lastRun = pick?.sections ?? [:]
     }
 
     // MARK: polling

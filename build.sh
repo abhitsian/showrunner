@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 APP="$HOME/Applications/Showrunner.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -o "$APP/Contents/MacOS/Showrunner" Show.swift Actions.swift Model.swift Views.swift main.swift 2>&1 | grep -E "error|warning: unre" || true
+swiftc -O -o "$APP/Contents/MacOS/Showrunner" Show.swift Actions.swift Pack.swift Model.swift Views.swift main.swift 2>&1 | grep -E "error|warning: unre" || true
 [ -x "$APP/Contents/MacOS/Showrunner" ] || { echo "build failed"; exit 1; }
 cp examples/template.show.md "$APP/Contents/Resources/template.md"
 cp AppIcon.icns README.md sr.py "$APP/Contents/Resources/"
@@ -28,7 +28,19 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSAppleEventsUsageDescription</key><string>Showrunner brings Chrome tabs, Keynote slides and videos forward as you move through a show.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>UTExportedTypeDeclarations</key><array><dict>
+    <key>UTTypeIdentifier</key><string>local.showrunner.pack</string>
+    <key>UTTypeDescription</key><string>Showrunner show</string>
+    <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>showrunner</string></array></dict>
+  </dict></array>
   <key>CFBundleDocumentTypes</key><array><dict>
+    <key>CFBundleTypeName</key><string>Showrunner show</string>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
+    <key>LSItemContentTypes</key><array><string>local.showrunner.pack</string></array>
+    <key>CFBundleTypeIconFile</key><string>AppIcon</string>
+    <key>LSHandlerRank</key><string>Owner</string>
+  </dict><dict>
     <key>CFBundleTypeName</key><string>Show</string>
     <key>CFBundleTypeRole</key><string>Viewer</string>
     <key>CFBundleTypeExtensions</key><array><string>json</string><string>md</string></array>

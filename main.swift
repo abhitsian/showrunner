@@ -194,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             m.addItem(.separator())
             add(m, "Edit Show File", #selector(editShow), "e")
             add(m, "Reveal in Finder", #selector(revealShow), "r", [.command, .shift])
+            add(m, "Share Show…", #selector(shareCurrent), "s", [.command, .shift])
             add(m, "Reload", #selector(reloadShow), "r")
             m.addItem(.separator())
             add(m, "Close Window", #selector(NSWindow.performClose(_:)), "w", target: nil)
@@ -244,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         case #selector(toggleSharing): mi.state = Pref.hideFromSharing ? .on : .off
         case #selector(toggleKeepFocus): mi.state = Pref.keepFocus ? .on : .off
         case #selector(toggleMenuBarIcon): mi.state = Pref.menuBarIcon ? .on : .off
-        case #selector(editShow), #selector(revealShow), #selector(reloadShow), #selector(saveRun), #selector(restartClock), #selector(runChecks):
+        case #selector(editShow), #selector(revealShow), #selector(shareCurrent), #selector(reloadShow), #selector(saveRun), #selector(restartClock), #selector(runChecks):
             return model.path != nil
         case #selector(arrive): return !(model.current?.item.go.isEmpty ?? true)
         case #selector(fallback): return !(model.current?.item.fallback.isEmpty ?? true)
@@ -315,9 +316,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     @objc func openExamples() { if let p = Bundle.main.path(forResource: "examples", ofType: nil) { NSWorkspace.shared.open(URL(fileURLWithPath: p)) } }
 
     func open(_ p: String) {
+        if p.lowercased().hasSuffix(".showrunner") {
+            do {
+                let show = try Pack.unpack(p)
+                model.say("Unpacked \((p as NSString).lastPathComponent) into \((show as NSString).deletingLastPathComponent)")
+                return open(show)
+            } catch { alert("Couldn't open \((p as NSString).lastPathComponent)", "\(error)"); return }
+        }
         model.open(p)
         NSDocumentController.shared.noteNewRecentDocumentURL(URL(fileURLWithPath: p))
         show()
+    }
+
+    @objc func shareCurrent() { if let p = model.path { share(p) } }
+
+    // pack the show and everything it refers to into one .showrunner file, then offer AirDrop, Mail, Messages…
+    func share(_ p: String) {
+        model.say("Packing \((p as NSString).lastPathComponent)…")
+        DispatchQueue.global().async {
+            do {
+                let out = try Pack.pack(p)
+                DispatchQueue.main.async {
+                    let size = ((try? FileManager.default.attributesOfItem(atPath: out)[.size] as? Int) ?? 0) / 1_000_000
+                    self.model.say("Packed \((out as NSString).lastPathComponent) (\(size) MB) in \((out as NSString).deletingLastPathComponent)")
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: out)])
+                    if let v = self.panel.contentView {
+                        NSSharingServicePicker(items: [URL(fileURLWithPath: out)])
+                            .show(relativeTo: NSRect(x: v.bounds.maxX - 220, y: v.bounds.maxY - 40, width: 1, height: 1), of: v, preferredEdge: .minY)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async { self.alert("Couldn't pack the show", "\(error)") }
+            }
+        }
+    }
+
+    func alert(_ title: String, _ text: String) {
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = text
+        a.runModal()
     }
 
     @objc func openShow() {
@@ -325,7 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let o = NSOpenPanel()
         o.allowsMultipleSelection = false
         o.canChooseDirectories = false
-        o.message = "Choose a .show.md or .show.json"
+        o.message = "Choose a .show.md, a .show.json, or a .showrunner file someone shared"
         o.directoryURL = URL(fileURLWithPath: (("~/Showrunner") as NSString).expandingTildeInPath)
         if o.runModal() == .OK, let u = o.url { open(u.path) }
     }
@@ -368,6 +406,14 @@ if let k = args.firstIndex(of: "--check"), args.count > k + 1 {
         print("error: \(error)")
         exit(1)
     }
+}
+
+// Showrunner --pack <show> [out dir] · Showrunner --unpack <file.showrunner>: share a show without the window
+if let k = args.firstIndex(of: "--pack"), args.count > k + 1 {
+    do { print(try Pack.pack(args[k + 1], to: args.count > k + 2 ? args[k + 2] : Pack.sharedDir)); exit(0) } catch { print("error: \(error)"); exit(1) }
+}
+if let k = args.firstIndex(of: "--unpack"), args.count > k + 1 {
+    do { print(try Pack.unpack(args[k + 1])); exit(0) } catch { print("error: \(error)"); exit(1) }
 }
 
 let app = NSApplication.shared

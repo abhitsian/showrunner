@@ -3,9 +3,11 @@
 
   sr new <name> [--from demo|talk|interview|training|sales|review]   start a show in ~/Showrunner from an example
   sr import <deck.pptx> [--pdf deck.pdf] [-o out.show.md]            a show from a deck: one item per slide, notes as the talk track
-  sr from-autopilot <run.json> [-o out.show.json]                   convert a Handle Autopilot run of show
+  sr from-autopilot <run.json> [--flows f.json] [--fallback DIR] [--attach a,b] [-o out]   convert a Handle Autopilot run of show
   sr check <show>                                                   parse it, list the items, run the preflight checks
   sr open <show>                                                    open it in Showrunner
+  sr pack <show> [-o dir]                                           pack a show and its files into one .showrunner file to share
+  sr unpack <file.showrunner>                                       unpack a shared show into ~/Showrunner
   sr state | next | prev | go N | primary | toggle | beat | start | pause | reload | save    drive the open show
 """
 import json
@@ -117,24 +119,57 @@ def cmd_import(deck):
 
 
 def cmd_from_autopilot(path):
+    """Convert a Handle Autopilot run of show. With --flows flows.json, demo items also carry each flow's
+    URL (so the show finds the tab by address on a Mac without Handle) and its spoken lines as beats.
+    --fallback DIR attaches the recording whose name starts with each section's number (e.g. "2 Explore.mp4")."""
     run = json.load(open(os.path.expanduser(path)))
     out = arg("-o", os.path.splitext(os.path.expanduser(path))[0] + ".show.json")
+    flows = json.load(open(os.path.expanduser(arg("--flows")))) if arg("--flows") else []
+    recs = []
+    if arg("--fallback"):
+        d = os.path.expanduser(arg("--fallback"))
+        recs = [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.lower().endswith((".mp4", ".mov", ".m4v"))]
     kinds = {"tab": "demo", "slide": "slide", "talk": "talk"}
     sections = []
     for s in run.get("sections", []):
+        num = re.match(r"\s*(\d+)", s.get("title", ""))
+        rec = next((r for r in recs if num and re.search(r"(^|\D)" + num.group(1) + r"\D", os.path.basename(r))), None)
         items = []
         for it in s.get("items", []):
             n = {"kind": kinds.get(it.get("kind"), "talk"), "title": it.get("title", "")}
             for k in ("cue", "say", "note", "image", "slide"):
                 if it.get(k):
                     n[k] = it[k]
-            if it.get("flow") is not None:
-                n["go"] = [{"handleFlow": it["flow"]}]
+            f = it.get("flow")
+            fl = flows[f] if f is not None and f < len(flows) else None
+            if fl is not None and n["kind"] == "demo":
+                act = {"handleFlow": f}
+                if fl.get("url"):
+                    act["chrome"] = fl["url"]
+                if fl.get("start"):
+                    act["open"] = fl["start"]
+                n["go"] = [act]
+                if fl.get("say") and not n.get("say"):
+                    n["say"] = fl["say"]
+                lines = [{"say": st["say"], "note": "On screen: " + st.get("text", "")} for st in fl.get("steps", []) if st.get("say")]
+                if lines:
+                    n["lines"] = lines
+                if rec:
+                    n["fallback"] = [{"video": rec}]
+            elif f is not None and not (fl or {}).get("slides"):
+                n["go"] = [{"handleFlow": f}]
             items.append(n)
         sections.append({"title": s.get("title", ""), "items": items})
-    show = {"title": run.get("title", ""), "sections": sections, "preflight": [{"handle": True}]}
-    with open(out, "w") as f:
-        json.dump(show, f, ensure_ascii=False, indent=2)
+    show = {"title": run.get("title", ""), "sections": sections}
+    if arg("--attach"):
+        show["attach"] = [os.path.abspath(os.path.expanduser(x)) for x in arg("--attach").split(",")]
+    if flows:
+        hosts = sorted({re.match(r"https?://[^/]+", fl["start"]).group(0) for fl in flows if re.match(r"https?://", fl.get("start") or "")})
+        show["preflight"] = [{"url": h} for h in hosts] + [{"displays": 2}]
+    else:
+        show["preflight"] = [{"handle": True}]
+    with open(out, "w") as fh:
+        json.dump(show, fh, ensure_ascii=False, indent=2)
     print(out)
 
 
@@ -160,6 +195,11 @@ def main():
         cmd_from_autopilot(a[1])
     elif c == "check" and len(a) > 1:
         sys.exit(subprocess.run([os.path.join(APP, "Contents/MacOS/Showrunner"), "--check", os.path.abspath(os.path.expanduser(a[1]))]).returncode)
+    elif c == "pack" and len(a) > 1:
+        out = [os.path.abspath(os.path.expanduser(arg("-o")))] if arg("-o") else []
+        sys.exit(subprocess.run([os.path.join(APP, "Contents/MacOS/Showrunner"), "--pack", os.path.abspath(os.path.expanduser(a[1]))] + out).returncode)
+    elif c == "unpack" and len(a) > 1:
+        sys.exit(subprocess.run([os.path.join(APP, "Contents/MacOS/Showrunner"), "--unpack", os.path.abspath(os.path.expanduser(a[1]))]).returncode)
     elif c == "open" and len(a) > 1:
         subprocess.run(["open", "-a", APP, os.path.abspath(os.path.expanduser(a[1]))])
     elif c == "go" and len(a) > 1:

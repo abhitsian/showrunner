@@ -59,13 +59,13 @@ struct Presenter: View {
                     .background(Color.orange.opacity(0.12)).cornerRadius(8)
                 }
                 ActionButtons(m: m, item: c.item)
-                if c.item.handle {
+                if m.isDemo {
                     if m.onItemTab { DemoLines(m: m) } else { Text("Switching to the demo tab…").foregroundColor(.secondary); Spacer() }
                 } else {
                     TalkView(m: m, item: c.item)
                 }
             } else {
-                Welcome()
+                Welcome(m: m)
             }
             BigButtons(m: m)
         }
@@ -249,6 +249,13 @@ struct Navigator: View {
                 Text(m.show.title.isEmpty ? "SHOWRUNNER" : m.show.title.uppercased())
                     .font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary).lineLimit(1)
                 Spacer()
+                if !m.show.attach.isEmpty {
+                    Menu("📎 \(m.show.attach.count)") {
+                        ForEach(m.show.attach, id: \.self) { p in
+                            Button((p as NSString).lastPathComponent) { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
+                        }
+                    }.menuStyle(.borderlessButton).fixedSize().help("Files kept with this show")
+                }
                 if m.show.usesHandle {
                     Circle().fill(m.handleUp ? Color.green : Color.red).frame(width: 8, height: 8)
                         .help(m.handleUp ? "Connected to Handle" : "Handle bridge not reachable")
@@ -270,8 +277,10 @@ struct Navigator: View {
                 Text("Q&A").tag(1)
                 Text("Checks").tag(2)
                 Text("Log").tag(3)
+                Text("Shows").tag(4)
             }.pickerStyle(.segmented).labelsHidden()
             switch tab {
+            case 4: ShowsView(m: m)
             case 1: QAView(m: m, query: $query)
             case 2: ChecksView(m: m)
             case 3: LogView(m: m)
@@ -400,7 +409,7 @@ struct SectionHeader: View {
                     .foregroundColor(planned > 0 && spent > planned ? .red : planned > 0 && spent > planned * 0.85 ? .orange : .secondary)
             }
             if planned > 0 { Text("/ \(fmt(planned))").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary) }
-            if let last, last > 0 { Text("last \(fmt(last))").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary) }
+            if let last, last > 0 { Text("\(m.compareRun == nil ? "last" : "run") \(fmt(last))").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary) }
         }
     }
 }
@@ -490,6 +499,7 @@ struct LogView: View {
 
 // shown when no show is open: start one, open one, or pick a recent one
 struct Welcome: View {
+    @ObservedObject var m: Model
     var app: AppDelegate? { NSApp.delegate as? AppDelegate }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -501,20 +511,69 @@ struct Welcome: View {
                 Button("Open Show…") { app?.openShow() }.keyboardShortcut("o")
                 Button("Example Shows") { app?.openExamples() }
             }
-            let recent = UserDefaults.standard.stringArray(forKey: "recent") ?? []
-            if !recent.isEmpty {
-                Text("RECENT").font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary).padding(.top, 8)
-                ForEach(recent.prefix(8), id: \.self) { p in
-                    Button { app?.open(p) } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text((p as NSString).lastPathComponent).font(.system(size: 13, weight: .medium))
-                            Text((p as NSString).deletingLastPathComponent).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
-                        }
-                    }.buttonStyle(.plain)
-                }
+            if !m.library.isEmpty {
+                Text("YOUR SHOWS").font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary).padding(.top, 8)
+                ShowsView(m: m)
             }
             Text("From Terminal: sr import deck.pptx --pdf deck.pdf turns a deck into a show.").font(.system(size: 11)).foregroundColor(.secondary).padding(.top, 8)
             Spacer()
         }
+    }
+}
+
+// the Shows library: every show in ~/Showrunner and the recent list, with its saved runs. Open one, share one,
+// or pick a past run to compare the outline against.
+struct ShowsView: View {
+    @ObservedObject var m: Model
+    var app: AppDelegate? { NSApp.delegate as? AppDelegate }
+    static let day: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM, HH:mm"; return f }()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(m.library) { s in
+                    let open = (s.path as NSString).resolvingSymlinksInPath == ((m.path ?? "") as NSString).resolvingSymlinksInPath
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(s.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                            if open { Text("OPEN").font(.system(size: 9, weight: .bold)).foregroundColor(.accentColor) }
+                            Spacer()
+                            if !open { Button("Open") { app?.open(s.path) }.controlSize(.small) }
+                            Button("Share…") { app?.share(s.path) }.controlSize(.small).help("Pack the show and its files into one .showrunner file")
+                        }
+                        Text("\(s.items) items · \(fmt(s.planned)) planned · \(s.runs.isEmpty ? "no runs yet" : "\(s.runs.count) run\(s.runs.count == 1 ? "" : "s")")")
+                            .font(.system(size: 11)).foregroundColor(.secondary)
+                        Text((s.path as NSString).abbreviatingWithTildeInPath).font(.system(size: 10)).foregroundColor(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                        if !s.runs.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(s.runs.reversed().prefix(open ? 10 : 3)) { r in
+                                    let picked = open && (m.compareRun ?? m.runs.last?.id) == r.id
+                                    HStack(spacing: 6) {
+                                        Text(r.at.map { Self.day.string(from: $0) } ?? "run \(r.id + 1)").font(.system(size: 11))
+                                        Text("\(fmt(r.total)) of \(fmt(r.planned))").font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(r.planned > 0 && r.total > r.planned ? .orange : .secondary)
+                                        Spacer()
+                                        if open {
+                                            Button(picked ? "Comparing" : "Compare") { m.compare(r.id == m.runs.last?.id ? nil : r.id) }
+                                                .controlSize(.mini).disabled(picked)
+                                                .help("Show this run's section times beside each budget in the outline")
+                                        }
+                                    }
+                                }
+                            }.padding(.leading, 8)
+                        }
+                    }
+                    .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(open ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06)).cornerRadius(6)
+                }
+                if m.library.isEmpty { Text("No shows yet. File > New Show, or open a .showrunner file someone sent you.").foregroundColor(.secondary) }
+                HStack {
+                    Button("Open Shows Folder") { NSWorkspace.shared.open(URL(fileURLWithPath: Pack.root)) }
+                    Button("Refresh") { m.scanLibrary() }
+                }.controlSize(.small).padding(.top, 4)
+            }
+        }
+        .onAppear { m.scanLibrary() }
     }
 }
