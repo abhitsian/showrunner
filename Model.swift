@@ -42,8 +42,17 @@ final class Model: ObservableObject {
     private var lastGo = Date.distantPast
     private var timer: Timer?
 
+    // paths from the remote control arrive without their leading slash
+    static func absolute(_ p: String) -> String {
+        let e = (p as NSString).expandingTildeInPath
+        return e.hasPrefix("/") ? e : "/" + e
+    }
+
     init() {
-        if let p = UserDefaults.standard.string(forKey: "showPath") { open(p, keepPosition: true) } else { scanLibrary() }
+        if let r = UserDefaults.standard.stringArray(forKey: "recent") {
+            UserDefaults.standard.set(r.map(Self.absolute).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }, forKey: "recent")
+        }
+        if let p = UserDefaults.standard.string(forKey: "showPath") { open(Self.absolute(p), keepPosition: true) } else { scanLibrary() }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
     }
 
@@ -52,7 +61,8 @@ final class Model: ObservableObject {
 
     // MARK: loading
 
-    func open(_ p: String, keepPosition: Bool = false) {
+    func open(_ raw: String, keepPosition: Bool = false) {
+        let p = Self.absolute(raw)
         path = p
         stamp = nil
         reload(keepPosition: keepPosition)

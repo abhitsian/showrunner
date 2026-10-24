@@ -249,6 +249,7 @@ struct Navigator: View {
                 Text(m.show.title.isEmpty ? "SHOWRUNNER" : m.show.title.uppercased())
                     .font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary).lineLimit(1)
                 Spacer()
+                Button("All Shows") { (NSApp.delegate as? AppDelegate)?.showLibrary() }.controlSize(.small).help("⌘L")
                 if !m.show.attach.isEmpty {
                     Menu("📎 \(m.show.attach.count)") {
                         ForEach(m.show.attach, id: \.self) { p in
@@ -575,5 +576,25 @@ struct ShowsView: View {
             }
         }
         .onAppear { m.scanLibrary() }
+    }
+}
+
+// the All Shows window: the library with its own header and actions
+struct LibraryWindow: View {
+    @ObservedObject var m: Model
+    var app: AppDelegate? { NSApp.delegate as? AppDelegate }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("All Shows").font(.system(size: 20, weight: .bold))
+                Spacer()
+                Button("New") { app?.newShow() }
+                Button("Open…") { app?.openShow() }
+            }
+            Text("Shows in ~/Showrunner and the ones you opened recently, with their saved runs. Share packs a show into one file someone else can open and run.")
+                .font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            ShowsView(m: m)
+        }
+        .padding(16)
     }
 }

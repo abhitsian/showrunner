@@ -88,6 +88,7 @@ enum Pref {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     var panel: NSPanel!
+    var libraryWindow: NSWindow?
     var item: NSStatusItem?
     var hotkeys: Hotkeys!
     var remote: Remote!
@@ -103,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         hotkeys = Hotkeys(model)
         remote = Remote(model)
         if let p = pending { model.open(p) }
+        showLibrary()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -186,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         _ = sub("File") { m in
             add(m, "New Show from Template", #selector(newShow), "n")
             add(m, "Open Show…", #selector(openShow), "o")
+            add(m, "All Shows", #selector(showLibrary), "l")
             let r = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
             let rm = NSMenu(title: "Open Recent")
             rm.delegate = self
@@ -229,7 +232,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         let win = sub("Window") { m in
             add(m, "Minimize", #selector(NSWindow.performMiniaturize(_:)), "m", target: nil)
-            add(m, "Showrunner", #selector(show), "1")
+            add(m, "Presenter", #selector(show), "1")
+            add(m, "All Shows", #selector(showLibrary), "2")
         }
         NSApp.windowsMenu = win
         _ = sub("Help") { m in
@@ -265,6 +269,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return
         }
         menu.addItem(withTitle: "Show Showrunner", action: #selector(show), keyEquivalent: "")
+        menu.addItem(withTitle: "All Shows", action: #selector(showLibrary), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Open Show…", action: #selector(openShow), keyEquivalent: "")
         let r = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
@@ -290,6 +295,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     @objc func show() { panel.makeKeyAndOrderFront(nil); panel.orderFrontRegardless() }
+
+    // a plain window listing every show and its runs; opens at launch and from the Dock
+    @objc func showLibrary() {
+        model.scanLibrary()
+        if libraryWindow == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 620), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+            w.title = "All Shows"
+            w.isReleasedWhenClosed = false
+            w.contentView = NSHostingView(rootView: LibraryWindow(m: model).frame(minWidth: 460, minHeight: 360))
+            w.setFrameAutosaveName("ShowrunnerLibrary")
+            if !NSScreen.screens.contains(where: { $0.visibleFrame.contains(w.frame) }) { w.center() }
+            libraryWindow = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        libraryWindow?.makeKeyAndOrderFront(nil)
+    }
     @objc func reloadShow() { model.reload() }
     @objc func editShow() { if let p = model.path { NSWorkspace.shared.open(URL(fileURLWithPath: (p as NSString).resolvingSymlinksInPath)) } }
     @objc func revealShow() { if let p = model.path { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: (p as NSString).resolvingSymlinksInPath)]) } }
@@ -316,6 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     @objc func openExamples() { if let p = Bundle.main.path(forResource: "examples", ofType: nil) { NSWorkspace.shared.open(URL(fileURLWithPath: p)) } }
 
     func open(_ p: String) {
+        defer { libraryWindow?.orderOut(nil) }
         if p.lowercased().hasSuffix(".showrunner") {
             do {
                 let show = try Pack.unpack(p)
@@ -383,7 +405,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         if model != nil && panel != nil { open(filename) } else { pending = filename }
         return true
     }
-    func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { show(); return true }
+    func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        show()
+        if model.path == nil || !panel.isOnActiveSpace { showLibrary() }
+        return true
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { false }
 }
 
